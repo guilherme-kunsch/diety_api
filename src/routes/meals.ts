@@ -25,17 +25,49 @@ export function meals(app: FastifyInstance) {
             user_id: request.user?.id
         })
 
-        console.log("POST user_id:", request.user?.id); // No método POST
-
         return reply.code(201).send("Meals create")
     })
 
-    app.get('/',{ preHandler: [checkSessionIdExists] }, async (request, reply) => {
-            const meals = await dbKnex("meals").where({ user_id: request.user?.id })
-
-            console.log("GET user_id:", request.user?.id); // No método GET
-
-            return reply.send({ meals })
-        },
+    app.get('/', { preHandler: [checkSessionIdExists] }, async (request, reply) => {
+        const meals = await dbKnex("meals").where({ user_id: request.user?.id })
+        return reply.send({ meals })
+    },
     )
+
+    app.get('/:mealId', { preHandler: [checkSessionIdExists] }, async(request, reply) => {
+        const paramsSchema = z.object({ mealId: z.string().uuid() })
+
+        const { mealId } = paramsSchema.parse(request.params)
+    } )
+
+    app.put("/:mealId", { preHandler: [checkSessionIdExists] }, async (request, reply) => {
+        const paramsSchema = z.object({ mealId: z.string().uuid() })
+
+        const { mealId } = paramsSchema.parse(request.params)
+
+        
+        const updateMealIdSchema = z.object({
+            name: string().trim(),
+            description: string().trim(),
+            isOnDiet: boolean(),
+            date: z.coerce.date()
+        })
+
+        const { name, description, isOnDiet, date } = updateMealIdSchema.parse(request.body)
+
+        const meal = dbKnex('meals').where({ id: mealId }).first()
+
+        if(!meal) {
+            return reply.code(404).send("meal not exist")
+        }
+
+        await dbKnex('meals').update({
+            name,
+            description,
+            is_on_diet: isOnDiet,
+            date: date.getTime()
+        })
+
+        return reply.code(200).send("updated meal")
+    })
 }
