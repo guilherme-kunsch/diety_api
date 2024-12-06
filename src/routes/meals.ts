@@ -3,7 +3,6 @@ import { checkSessionIdExists } from "../middlewares/check-session-id";
 import { boolean, string, z } from "zod";
 import dbKnex from "../database";
 import { randomUUID } from "crypto";
-import knex from "knex";
 
 export function meals(app: FastifyInstance) {
     app.post('/', { preHandler: checkSessionIdExists }, async (request, reply) => {
@@ -34,40 +33,60 @@ export function meals(app: FastifyInstance) {
     },
     )
 
-    app.get('/:mealId', { preHandler: [checkSessionIdExists] }, async(request, reply) => {
-        const paramsSchema = z.object({ mealId: z.string().uuid() })
+    app.get('/:mealId', { preHandler: [checkSessionIdExists] }, async (request, reply) => {
+        try {
+            const paramsSchema = z.object({ mealId: z.string().uuid() });
+            const { mealId } = paramsSchema.parse(request.params);
 
-        const { mealId } = paramsSchema.parse(request.params)
-    } )
+            const meal = await dbKnex('meals').where({ id: mealId }).first();
+
+            if (!meal) {
+                return reply.code(404).send({ error: "Meal not found" });
+            }
+
+            return reply.code(200).send(meal);
+        } catch (error) {
+            console.error("Error fetching meal:", error);
+            return reply.code(500).send({ error: "Internal Server Error" });
+        }
+    });
+
 
     app.put("/:mealId", { preHandler: [checkSessionIdExists] }, async (request, reply) => {
-        const paramsSchema = z.object({ mealId: z.string().uuid() })
 
-        const { mealId } = paramsSchema.parse(request.params)
+        try {
+            const paramsSchema = z.object({ mealId: z.string().uuid() })
 
-        
-        const updateMealIdSchema = z.object({
-            name: string().trim(),
-            description: string().trim(),
-            isOnDiet: boolean(),
-            date: z.coerce.date()
-        })
+            const { mealId } = paramsSchema.parse(request.params)
 
-        const { name, description, isOnDiet, date } = updateMealIdSchema.parse(request.body)
 
-        const meal = dbKnex('meals').where({ id: mealId }).first()
+            const updateMealIdSchema = z.object({
+                name: string().trim(),
+                description: string().trim(),
+                isOnDiet: boolean(),
+                date: z.coerce.date()
+            })
 
-        if(!meal) {
-            return reply.code(404).send("meal not exist")
+            const { name, description, isOnDiet, date } = updateMealIdSchema.parse(request.body)
+
+            const meal = dbKnex('meals').where({ id: mealId }).first()
+
+            if (!meal) {
+                return reply.code(404).send("meal not exist")
+            }
+
+            await dbKnex('meals').update({
+                name,
+                description,
+                is_on_diet: isOnDiet,
+                date: date.getTime()
+            })
+
+            return reply.code(200).send("updated meal")
+        } catch (error) {
+            console.error("Error fetching meal:", error);
+            return reply.code(500).send({ error: "Internal Server Error" });
         }
 
-        await dbKnex('meals').update({
-            name,
-            description,
-            is_on_diet: isOnDiet,
-            date: date.getTime()
-        })
-
-        return reply.code(200).send("updated meal")
     })
 }
